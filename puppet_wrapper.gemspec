@@ -8,10 +8,10 @@ Gem::Specification.new do |spec|
   spec.version       = PuppetWrapper::VERSION
   spec.authors       = ["Jeff McCune"]
   spec.email         = ["jeff@puppetlabs.com"]
-  spec.description   = %q{TODO: Write a gem description}
-  spec.summary       = %q{TODO: Write a gem summary}
+  spec.description   = %q{Modify the puppet binstub to use /etc/operations/puppet and /var/lib/operations/puppet}
+  spec.summary       = %q{Modify the puppet binstub to use /etc/operations/puppet and /var/lib/operations/puppet}
   spec.homepage      = ""
-  spec.license       = "MIT"
+  spec.license       = "Apache 2.0"
 
   spec.files         = `git ls-files`.split($/)
   spec.executables   = spec.files.grep(%r{^bin/}) { |f| File.basename(f) }
