@@ -1,15 +1,15 @@
 # coding: utf-8
 lib = File.expand_path('../lib', __FILE__)
 $LOAD_PATH.unshift(lib) unless $LOAD_PATH.include?(lib)
-require 'puppet_wrapper/version'
+require 'puppet_transplant/version'
 
 Gem::Specification.new do |spec|
-  spec.name          = "puppet_wrapper"
-  spec.version       = PuppetWrapper::VERSION
+  spec.name          = "puppet_transplant"
+  spec.version       = PuppetTransplant::VERSION
   spec.authors       = ["Jeff McCune"]
   spec.email         = ["jeff@puppetlabs.com"]
-  spec.description   = %q{Modify the puppet binstub to use /etc/operations/puppet and /var/lib/operations/puppet}
-  spec.summary       = %q{Modify the puppet binstub to use /etc/operations/puppet and /var/lib/operations/puppet}
+  spec.description   = %q{Relocate puppet to use a different default confdir and vardir}
+  spec.summary       = %q{Relocate puppet to use a different default confdir and vardir}
   spec.homepage      = ""
   spec.license       = "Apache 2.0"
 
