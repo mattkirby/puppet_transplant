@@ -2,7 +2,7 @@
 require 'puppet_wrapper/installer'
 
 module Gem
-  post_install do |gem_installer|
-    PuppetWrapper::Installer.process(gem_installer)
+  pre_install do |gem_installer|
+    PuppetWrapper::Installer.pre_install(gem_installer)
   end
 end
