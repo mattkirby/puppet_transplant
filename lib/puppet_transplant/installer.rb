@@ -3,7 +3,24 @@ require 'rbconfig'
 require 'rubygems/installer'
 
 module PuppetTransplant
+  ##
+  # The Installer class contains all of the data and behavior required to
+  # relocate Puppet's default system confdir and vardir settings.  The behavior
+  # is intended to be implemented as a [rubygems
+  # plugin](http://rubygems.rubyforge.org/rubygems-update/Gem.html#method-c-post_install),
+  # called using something like the following example.
+  #
+  #     module Gem
+  #       post_install do |gem_installer|
+  #         PuppetTransplant::Installer.post_install(gem_installer)
+  #       end
+  #     end
+  #
+  # @author Jeff McCune <jeff@puppetlabs.com>
   class Installer
+    ##
+    # RelocationError instances are raised when modification of Puppet's
+    # behavior fails for some reason.  The message should indicate why.
     class RelocationError < Exception; end
 
     ##
@@ -14,31 +31,24 @@ module PuppetTransplant
     #
     # @param [Gem::Installer] gem_installer The gem installer instance of the
     #   gem just installed, passed from the Gem.post_install callback.
+    #
+    # @return [Boolean] true if relocation succeeded, false if it did not
+    #   succeed.
     def self.post_install(gem_installer)
       # Do nothing unless we're dealing with Puppet.
       return unless gem_installer.spec.name == 'puppet'
       # Perform the relocation
       installer = new(gem_installer)
-      installer.relocate_puppet!
+      begin
+        installer.relocate_puppet!
+      rescue RelocationError => detail
+        gem_installer.ui.alert_error "PuppetTransplant relocation failed: #{detail}"
+        return false
+      end
       # Let the user know what happened
       gem_installer.ui.debug "Transplanted confdir: #{installer.confdir}"
       gem_installer.ui.debug "Transplanted vardir:  #{installer.vardir}"
-    end
-
-    ##
-    # pre_install takes a {Gem::Installer} instance expected to be passed from
-    # a Gem.pre_install callback and overrides the
-    # {Gem::Installer#app_script_text} method if the puppet gem is about to be
-    # installed.
-    #
-    # @deprecated in favor of {.post_install}
-    #
-    # @param [Gem::Installer] gem_installer The gem installer instance of the
-    #   gem just installed, passed from the Gem.pre_install callback.
-    def self.pre_install(gem_installer)
-      return unless gem_installer.spec.name == 'puppet'
-      installer = new(gem_installer)
-      installer.modify_app_script_text!
+      return true
     end
 
     attr_reader :gem_installer
@@ -48,53 +58,6 @@ module PuppetTransplant
     #   typically passed from the plugin hook.
     def initialize(gem_installer)
       @gem_installer = gem_installer
-    end
-
-    ##
-    # modify_app_script_text! monkey patches the
-    # {Gem::Installer#app_script_text}
-    # method to implement the following behavior for the `puppet` binstub:
-    #
-    # 1. If `--confdir` or `--vardir` are specified via ARGV then use the
-    # provided values.
-    # 2. Otherwise modify ARGV to include `--confdir=/etc/#{org}/puppet` and
-    # `--vardir=/var/lib/#{org}/puppet`
-    #
-    # @deprecated in favor of overriding the default and confdir in a manner
-    #   that supports consistency between puppet as a library and puppet as an
-    #   application.  Implementing a wrapper script that sets --confdir and
-    #   --vardir creates inconsistent behavior between puppet as a library and
-    #   puppet as an application.
-    #
-    # @see {#relocate_puppet!}
-    #
-    # @see #org
-    #
-    # @api private
-    #
-    # @return [String] the text of the modified app script.
-    def modify_app_script_text!
-      custom_app_script_text = method(:app_script_text)
-      bindir  = bindir()
-      confdir = confdir()
-      vardir  = vardir()
-
-      gem_installer.instance_eval do
-        orig_app_script_text = method(:app_script_text)
-        define_singleton_method(:app_script_text) do |bin_file_name|
-          case bin_file_name
-          when 'puppet'
-            ui.say "***************************************************"
-            ui.say "* PuppetTransplant produced #{bindir}/puppet"
-            ui.say "*  confdir: #{confdir}"
-            ui.say "*  vardir:  #{vardir}"
-            ui.say "***************************************************"
-            custom_app_script_text.call(bin_file_name)
-          else
-            orig_app_script_text.call(bin_file_name)
-          end
-        end
-      end
     end
 
     ##
@@ -115,12 +78,7 @@ module PuppetTransplant
       if puppet_override_api?
         rval = write_override_files
       else
-        begin
-          rval = modify_run_mode_in_place
-        rescue RelocationError => detail
-          gem_installer.ui.alert_error "Modification of run_mode.rb failed: #{detail}"
-          return false
-        end
+        rval = modify_run_mode_in_place
       end
       !!rval
     end
@@ -144,9 +102,9 @@ module PuppetTransplant
     def modify_run_mode_in_place
       # Locate the run_mode.rb file
       dir = gem_installer.dir
-      spec = gem_installer.spec
+      files = spec.files
 
-      if run_mode_file = spec.files.find() {|p| p.match(/\/run_mode.rb$/)}
+      if run_mode_file = files.find() {|p| p.match(/\/run_mode.rb$/)}
         run_mode_path = Pathname.new(File.join(dir, run_mode_file))
       else
         raise RelocationError, "Could not find run_mode.rb in the file list."
@@ -218,34 +176,6 @@ module PuppetTransplant
     end
 
     ##
-    # @deprecated in favor of overriding the default and confdir in a manner
-    #   that supports consistency between puppet as a library and puppet as an
-    #   application.  Implementing a wrapper script that sets --confdir and
-    #   --vardir creates inconsistent behavior between puppet as a library and
-    #   puppet as an application.
-    #
-    # @see {#relocate_puppet!}
-    #
-    # @api private
-    #
-    # @return [String] the binstub contents
-    def app_script_text(bin_file_name)
-      return <<-TEXT
-#{shebang bin_file_name}
-#
-# This file was generated by PuppetTransplant in order to override the default
-# confdir and vardir in a generic way without patching.
-
-require 'rubygems'
-
-version = "#{Gem::Requirement.default}"
-
-gem '#{spec.name}', version
-load Gem.bin_path('#{spec.name}', '#{bin_file_name}', version)
-TEXT
-    end
-
-    ##
     # org parses the filesystem path of the location of the ruby prefix path to
     # determine the organization name.  For example, if Ruby is installed with
     # a prefix of `/opt/operations` then this method will return `operations`.
@@ -285,11 +215,6 @@ TEXT
     end
     private :spec
 
-    def shebang(bin_file_name)
-      gem_installer.shebang(bin_file_name)
-    end
-    private :shebang
-
     ##
     # is_windows returns true if the ruby interpreter is currently running on a
     # windows platform.
@@ -323,17 +248,5 @@ TEXT
     def vardir
       @vardir ||= "/var/lib/#{org}/puppet"
     end
-
-    ##
-    # bindir returns the bin directory where binstub scripts will be written.
-    def bindir
-      bindir = gem_installer.bin_dir || Gem.bindir(gem_home)
-    end
-    private :bindir
-
-    def gem_home
-      gem_installer.gem_home
-    end
-    private :gem_home
   end
 end
