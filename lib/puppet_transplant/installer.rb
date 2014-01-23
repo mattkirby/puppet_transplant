@@ -233,7 +233,7 @@ module PuppetTransplant
     # @return [String] The fully qualified path of the relocated default system
     #   confdir.
     def confdir
-      @confdir ||= "/etc/#{org}/puppet"
+      @confdir ||= "/opt/#{org}/etc/puppet"
     end
 
     ##
@@ -246,7 +246,7 @@ module PuppetTransplant
     # @return [String] The fully qualified path of the relocated default system
     #   vardir.
     def vardir
-      @vardir ||= "/var/lib/#{org}/puppet"
+      @vardir ||= "/opt/#{org}/var/lib/puppet"
     end
   end
 end
